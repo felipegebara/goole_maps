@@ -1,0 +1,116 @@
+from selenium import webdriver
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementNotInteractableException, ElementClickInterceptedException
+from tqdm import tqdm_notebook as tqdmn
+
+import pandas as pd
+import numpy as np
+import time, re
+
+driver = webdriver.Chrome("C:/Users/fgeba/Downloads/chromedriver.exe")
+
+competition = []
+
+starting_business = 'restaurantes'
+city = 'alphaville'
+url = 'https://www.google.com/maps/search/' + starting_business + ' ' + city
+
+driver.get(url)
+
+
+
+for i in tqdmn(range(5),  disable=True):
+
+    WebDriverWait(driver, 25).until(EC.visibility_of_element_located((By.CLASS_NAME, "section-result-title")))
+
+    result_names = [i.text for i in driver.find_elements_by_css_selector('h3[class=section-result-title]')]
+    result_addresses = [i.text for i in driver.find_elements_by_css_selector('span[class=section-result-location]')]
+    print(result_names)
+    for name, address in zip(result_names, result_addresses):
+        competition.append(name + ' ' + address)
+
+    try:
+        WebDriverWait(driver, 25).until(EC.visibility_of_element_located(
+            (By.XPATH, "//*[@id='n7lv7yjyC35__section-pagination-button-next']"))).click()
+    except ElementClickInterceptedException:
+        break
+
+    time.sleep(5)
+
+competition = [i.replace('/', ' ') for i in competition]
+
+full_name = []
+rating = []
+total_ratings = []
+business_cat = []
+price_range = []
+review_topics = []
+lat = []
+long = []
+
+for business in tqdmn(competition,disable=True, leave=False, desc='2. Extracting the data'):
+
+    url = 'https://www.google.com/maps/search/' + business
+    driver.get(url)
+
+    try:
+        WebDriverWait(driver, 25).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "section-hero-header-title-title")))
+    except (NoSuchElementException, TimeoutException) as e:
+        continue
+
+    try:
+        full_name.append(driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[2]/div[1]/div[1]').text)
+    except NoSuchElementException:
+        full_name.append(np.nan)
+
+    try:
+        rating.append(driver.find_element_by_xpath(
+            '//*[@id="pane"]/div/div[1]/div/div/div[2]/div[1]/div[2]/div/div[1]/span[1]/span/span').text)
+    except NoSuchElementException:
+        rating.append(np.nan)
+
+    try:
+        total_ratings.append(driver.find_element_by_xpath(
+            '//*[@id="pane"]/div/div[1]/div/div/div[32]/div/div[2]/button').text)
+    except NoSuchElementException:
+        total_ratings.append(np.nan)
+
+    try:
+        business_cat.append(driver.find_element_by_xpath(
+            '//*[@id="pane"]/div/div[1]/div/div/div[2]/div[1]/div[2]/div/div[2]/span[1]/span[1]/button').text)
+    except NoSuchElementException:
+        business_cat.append(np.nan)
+
+    try:
+        price_range.append(driver.find_element_by_xpath(
+            '//*[@id="pane"]/div/div[1]/div/div/div[2]/div[1]/div[2]/div/div[1]/span[2]/span/span[2]/span[2]/span[1]/span').text)
+    except NoSuchElementException:
+        price_range.append(np.nan)
+
+    try:
+        driver.find_element_by_xpath("//*[contains(@aria-label, 'more Topics')]").click()
+    except (NoSuchElementException, ElementNotInteractableException, ElementClickInterceptedException) as e:
+        pass
+
+    try:
+        review_topics.append([i.text for i in driver.find_elements_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[41]/div[]/div/button/span[1]')])
+    except NoSuchElementException:
+        review_topics.append(np.nan)
+
+    try:
+        coordinates = driver.find_element_by_css_selector('meta[itemprop=image]').get_attribute('content')
+        coordinates = coordinates.split('?center=')[1].split('&zoom=')[0].split('%2C')
+        lat.append(coordinates[0])
+        long.append(coordinates[1])
+    except NoSuchElementException:
+        lat.append(np.nan)
+        long.append(np.nan)
+
+SH = pd.DataFrame(data={'full_name':full_name, 'rating':rating, 'total_ratings':total_ratings, 'business_category':business_cat, 'price_range':price_range,  'review_topics':review_topics, 'latitude':lat, 'longitude':long})
+
+
+SH.to_csv('C:/Users/fgeba/PycharmProjects/untitled/SH.csv')
